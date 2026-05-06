@@ -548,12 +548,46 @@ def clear_wishlist(request):
 
 
 @login_required
+def check_login(request):
+    """Simple endpoint for frontend to check login status"""
+    return JsonResponse({'logged_in': True})
+
+
+@login_required
 def checkout(request):
-    cart_items = CartItem.objects.filter(user=request.user)
+    # Check if direct purchase (from Buy Now button)
+    product_id = request.GET.get('product_id')
+    quantity = int(request.GET.get('quantity', 1))
+    direct_purchase_item = None
     
-    if not cart_items:
+    if product_id:
+        try:
+            product = Product.objects.get(id=product_id, stock=True)
+            # Use discounted price if available, otherwise base price
+            price = product.discounted_price if product.discounted_price else product.base_price
+            direct_purchase_item = {
+                'product': product,
+                'quantity': quantity,
+                'price': price,
+                'total': price * quantity,
+                'name': product.name
+            }
+        except Product.DoesNotExist:
+            messages.error(request, 'Product not available.')
+            return redirect('shop')
+    
+    # If normal cart checkout and cart is empty
+    cart_items = CartItem.objects.filter(user=request.user)
+    if not direct_purchase_item and not cart_items:
         messages.error(request, 'Your cart is empty!')
         return redirect('shop')
+    
+    addresses = Address.objects.filter(user=request.user)
+    
+    # For direct purchase with no address: Show warning but still show checkout
+    if not addresses and not direct_purchase_item:
+        messages.warning(request, 'Please add a shipping address before checkout.')
+        return redirect('profile')
     
     if request.method == 'POST':
         payment_method = request.POST.get('payment_method', 'cod')
@@ -565,7 +599,12 @@ def checkout(request):
         
         address = get_object_or_404(Address, id=address_id, user=request.user)
         
-        subtotal = sum(item.total_price for item in cart_items)
+        # Calculate totals based on cart or direct purchase
+        if direct_purchase_item:
+            subtotal = direct_purchase_item['total']
+        else:
+            subtotal = sum(item.total_price for item in cart_items)
+        
         shipping_fee = 0 if subtotal >= 499 else 40
         gst_amount = int(subtotal * Decimal('0.05'))
         total_amount = subtotal + shipping_fee + gst_amount
@@ -584,38 +623,57 @@ def checkout(request):
             status='Pending'
         )
         
-        for item in cart_items:
+        # Create order items from direct purchase OR cart
+        if direct_purchase_item:
             OrderItem.objects.create(
                 order=order,
-                product=item.product,
-                product_name=item.product.name,
-                quantity=item.quantity,
-                price=item.total_price / item.quantity
+                product=direct_purchase_item['product'],
+                product_name=direct_purchase_item['product'].name,
+                quantity=direct_purchase_item['quantity'],
+                price=direct_purchase_item['price']
             )
+            # Do NOT clear cart for direct purchase
+        else:
+            for item in cart_items:
+                OrderItem.objects.create(
+                    order=order,
+                    product=item.product,
+                    product_name=item.product.name,
+                    quantity=item.quantity,
+                    price=item.total_price / item.quantity
+                )
+            cart_items.delete()
         
-        cart_items.delete()
-        
-        messages.success(request, f'Order #{order_id} placed successfully!')
+        messages.success(request, f'Order #{order_id} placed successfully! We will process your order soon.')
         return redirect('order_detail', order_id=order.id)
     
-    addresses = Address.objects.filter(user=request.user)
-    if not addresses:
-        messages.warning(request, 'Please add a shipping address before checkout.')
-        return redirect('profile')
+    # GET request - prepare context
+    if direct_purchase_item:
+        subtotal = direct_purchase_item['total']
+        # Create a list with the direct purchase item for template display
+        cart_items_for_display = [{
+            'product': direct_purchase_item['product'],
+            'quantity': direct_purchase_item['quantity'],
+            'total': direct_purchase_item['total'],
+            'price': direct_purchase_item['price'],
+            'name': direct_purchase_item['product'].name
+        }]
+    else:
+        subtotal = sum(item.total_price for item in cart_items)
+        cart_items_for_display = cart_items
     
-    cart_items = CartItem.objects.filter(user=request.user)
-    subtotal = sum(item.total_price for item in cart_items)
     shipping_fee = 0 if subtotal >= 499 else 40
     gst_amount = int(subtotal * Decimal('0.05'))
     total_amount = subtotal + shipping_fee + gst_amount
     
     context = {
-        'cart_items': cart_items,
+        'cart_items': cart_items_for_display,
         'addresses': addresses,
         'subtotal': subtotal,
         'shipping_fee': shipping_fee,
         'gst_amount': gst_amount,
         'total_amount': total_amount,
+        'direct_purchase_mode': bool(direct_purchase_item),
         'cart_count': get_cart_count(request.user),
         'wishlist_count': get_wishlist_count(request.user),
     }
@@ -635,7 +693,6 @@ def order_detail(request, order_id):
 
 @login_required
 def add_review(request, product_id):
-    """Add a review - users CANNOT delete or edit reviews"""
     if request.method == 'POST':
         form = ReviewForm(request.POST)
         if form.is_valid():

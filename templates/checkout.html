@@ -15,10 +15,8 @@
 </head>
 <body>
 
-  <!-- Include Header -->
   {% include 'includes/header.html' %}
 
-  <!-- ==================== CHECKOUT SECTION ==================== -->
   <section class="checkout-section py-5">
     <div class="container">
       <div class="row">
@@ -40,11 +38,12 @@
         <div class="col-lg-8">
           <div class="billing-card">
             <h4 class="mb-4">Shipping Address</h4>
-            <form method="POST" action="{% url 'checkout' %}">
+            <form method="POST" action="{% url 'checkout' %}{% if direct_purchase_mode %}?product_id={{ cart_items.0.product.id }}&quantity={{ cart_items.0.quantity }}{% endif %}">
               {% csrf_token %}
               
               <div class="mb-4">
                 <label class="form-label fw-bold">Select Address</label>
+                {% if addresses %}
                 <select name="address_id" class="form-select" required>
                   <option value="">Select a shipping address...</option>
                   {% for address in addresses %}
@@ -53,6 +52,13 @@
                   </option>
                   {% endfor %}
                 </select>
+                {% else %}
+                <div class="alert alert-warning">
+                  <i class="fas fa-exclamation-triangle me-2"></i>
+                  You don't have any saved addresses. 
+                  <a href="{% url 'profile' %}" class="alert-link">Click here to add an address</a>
+                </div>
+                {% endif %}
                 <div class="mt-2">
                   <a href="{% url 'profile' %}" class="text-gold"><i class="fas fa-plus-circle"></i> Add New Address</a>
                 </div>
@@ -81,7 +87,12 @@
               </div>
               
               <div class="mt-4">
-                <button type="submit" class="btn btn-gold btn-lg w-100">Place Order <i class="fas fa-arrow-right ms-2"></i></button>
+                <button type="submit" class="btn btn-gold btn-lg w-100" {% if not addresses %}disabled{% endif %}>
+                  Place Order <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+                {% if not addresses %}
+                <small class="text-muted d-block text-center mt-2">Please add an address first</small>
+                {% endif %}
               </div>
             </form>
           </div>
@@ -93,30 +104,58 @@
             <div class="summary-details">
               <div class="summary-row">
                 <span>Subtotal</span>
-                <span>₹{{ subtotal }}</span>
+                <span>₹{{ subtotal|floatformat:0 }}</span>
               </div>
               <div class="summary-row">
                 <span>Shipping Fee</span>
-                <span>₹{{ shipping_fee }}</span>
+                <span>₹{{ shipping_fee|floatformat:0 }}</span>
               </div>
               <div class="summary-row">
                 <span>GST (5%)</span>
-                <span>₹{{ gst_amount }}</span>
+                <span>₹{{ gst_amount|floatformat:0 }}</span>
               </div>
               <div class="summary-divider"></div>
               <div class="summary-row total">
                 <span>Total</span>
-                <span>₹{{ total_amount }}</span>
+                <span>₹{{ total_amount|floatformat:0 }}</span>
               </div>
             </div>
             
             <div class="mt-4 pt-3 border-top">
-              <h6 class="text-gold">Your Cart Items:</h6>
+              <h6 class="text-gold">
+                {% if direct_purchase_mode %}
+                  <i class="fas fa-bolt me-1"></i> Direct Purchase Item:
+                {% else %}
+                  <i class="fas fa-shopping-cart me-1"></i> Your Cart Items:
+                {% endif %}
+              </h6>
               {% for item in cart_items %}
-              <div class="d-flex justify-content-between small mb-1">
-                <span>{{ item.product.name }} x{{ item.quantity }}</span>
-                <span>₹{{ item.total_price }}</span>
+              <div class="d-flex justify-content-between small mb-2">
+                <span>
+                  {% if item.product %}
+                    {{ item.product.name }}
+                  {% elif item.product_name %}
+                    {{ item.product_name }}
+                  {% else %}
+                    {{ item.name }}
+                  {% endif %}
+                  <span class="text-muted">x{{ item.quantity }}</span>
+                </span>
+                <span class="fw-bold">
+                  ₹
+                  {% if item.total %}
+                    {{ item.total|floatformat:0 }}
+                  {% elif item.total_price %}
+                    {{ item.total_price|floatformat:0 }}
+                  {% elif item.price %}
+                    {{ item.price|floatformat:0 }}
+                  {% else %}
+                    0
+                  {% endif %}
+                </span>
               </div>
+              {% empty %}
+              <p class="text-muted small text-center">No items in your cart</p>
               {% endfor %}
             </div>
           </div>
@@ -125,7 +164,6 @@
     </div>
   </section>
 
-  <!-- Include Footer -->
   {% include 'includes/footer.html' %}
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>

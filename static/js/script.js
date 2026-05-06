@@ -936,7 +936,7 @@ function setupShopFilters() {
         });
     }
     
-    // Add to Cart - ONLY updates cart badge
+    // Add to Cart - ONLY updates cart badge (NO redirect)
     async function handleAddToCart(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -994,50 +994,28 @@ function setupShopFilters() {
         }
     }
     
+    // ==================== FIXED BUY NOW (No cart addition) ====================
     async function handleBuyNow(e) {
         e.preventDefault();
         e.stopPropagation();
         const productId = this.getAttribute('data-product-id');
-        const originalHtml = this.innerHTML;
+        const quantity = 1;  // Default quantity; you can later read from a quantity input if needed
         
+        const originalHtml = this.innerHTML;
         this.disabled = true;
         this.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>';
         
         try {
-            const response = await fetch(`/cart/ajax-add/${productId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: new URLSearchParams({ quantity: 1 })
-            });
-            
-            const data = await response.json();
-            
-            if (response.status === 401) {
+            // Step 1: Check if user is logged in (simple endpoint)
+            const checkRes = await fetch('/api/check-login/');
+            if (checkRes.status === 401) {
                 window.location.href = `/login/?next=${encodeURIComponent(window.location.href)}`;
                 return;
             }
             
-            if (response.ok && data.status === 'success') {
-                // Update cart badge
-                const cartBadge = document.querySelector('.cart-count');
-                if (cartBadge && data.cart_count !== undefined) {
-                    cartBadge.textContent = data.cart_count;
-                    if (data.cart_count === 0) {
-                        cartBadge.style.display = 'none';
-                    } else {
-                        cartBadge.style.display = 'inline-block';
-                    }
-                }
-                window.location.href = '/checkout/';
-            } else {
-                showToast(data.message || 'Error processing. Please try again.', 'error');
-                this.disabled = false;
-                this.innerHTML = originalHtml;
-            }
+            // Step 2: Direct to checkout with product info (NO cart addition)
+            window.location.href = `/checkout/?product_id=${productId}&quantity=${quantity}`;
+            
         } catch (error) {
             console.error('Error:', error);
             showToast('Network error. Please try again.', 'error');
@@ -1128,53 +1106,22 @@ function setupBuyNowDirectCheckout() {
         
         const productId = this.getAttribute('data-product-id');
         const quantity = document.getElementById('productQuantity') ? document.getElementById('productQuantity').value : 1;
-        const variantId = document.getElementById('selectedVariantId') ? document.getElementById('selectedVariantId').value : '';
         
         const originalHtml = this.innerHTML;
         this.disabled = true;
         this.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Processing...';
         
         try {
-            const formData = new URLSearchParams();
-            formData.append('quantity', quantity);
-            if (variantId) {
-                formData.append('variant_id', variantId);
-            }
-            
-            const response = await fetch(`/cart/ajax-add/${productId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: formData
-            });
-            
-            const data = await response.json();
-            
-            if (response.status === 401) {
+            // Check login
+            const checkRes = await fetch('/api/check-login/');
+            if (checkRes.status === 401) {
                 window.location.href = `/login/?next=${encodeURIComponent(window.location.href)}`;
                 return;
             }
             
-            if (response.ok && data.status === 'success') {
-                // Update cart badge only
-                const cartBadge = document.querySelector('.cart-count');
-                if (cartBadge && data.cart_count !== undefined) {
-                    cartBadge.textContent = data.cart_count;
-                    if (data.cart_count === 0) {
-                        cartBadge.style.display = 'none';
-                    } else {
-                        cartBadge.style.display = 'inline-block';
-                    }
-                }
-                window.location.href = '/checkout/';
-            } else {
-                showToast(data.message || 'Error adding to cart. Please try again.', 'error');
-                this.disabled = false;
-                this.innerHTML = originalHtml;
-            }
+            // Direct to checkout with product data (no cart)
+            window.location.href = `/checkout/?product_id=${productId}&quantity=${quantity}`;
+            
         } catch (error) {
             console.error('Error:', error);
             showToast('Network error. Please try again.', 'error');
@@ -1438,7 +1385,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setupQuantitySelector();
     setupWeightSelection();
     setupCartQuantity();
-    // setupRemoveCartItem();  // REMOVED - duplicate with setupCartPage
     setupRemoveWishlistItem();
     setupClearWishlist();
     setupRatingInput();
@@ -1452,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupLazyLoading();
     setupShopFilters();
     setupProductPage();
-    setupCartPage();  // This handles remove confirmation (only once)
+    setupCartPage();
     setupWishlistPage();
     
     handleProfileSectionHash();

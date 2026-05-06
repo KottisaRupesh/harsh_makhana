@@ -48,6 +48,17 @@
         </div>
         <div class="col-lg-9">
           
+          <!-- Django Messages Display -->
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert alert-{{ message.tags|default:'success' }} alert-dismissible fade show mb-3" role="alert">
+                <i class="fas {% if message.tags == 'success' %}fa-check-circle{% elif message.tags == 'error' %}fa-exclamation-circle{% elif message.tags == 'warning' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+          
           <!-- Alert Container for Dynamic Messages -->
           <div id="profileAlertContainer"></div>
           

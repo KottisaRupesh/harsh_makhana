@@ -20,6 +20,9 @@ urlpatterns = [
     path('logout/', views.user_logout, name='logout'),
     path('password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
     
+    # API endpoints
+    path('api/check-login/', views.check_login, name='check_login'),
+    
     # Profile
     path('profile/', views.profile, name='profile'),
     path('profile/update/', views.update_profile, name='update_profile'),
@@ -47,9 +50,8 @@ urlpatterns = [
     path('checkout/', views.checkout, name='checkout'),
     path('order/<int:order_id>/', views.order_detail, name='order_detail'),
     
-    # Reviews (No delete/edit for users - only admin)
+    # Reviews
     path('review/add/<int:product_id>/', views.add_review, name='add_review'),
-    # Review delete is only for admin - no public URL for user delete
     
     # Newsletter
     path('subscribe/', views.subscribe_newsletter, name='subscribe_newsletter'),
