@@ -1,11 +1,23 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.db import models
 from .models import *
 
+# Unregister the default User admin if already registered
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
-    list_display = ['username', 'email', 'first_name', 'last_name', 'is_active']
-    search_fields = ['username', 'email']
-    list_filter = ['is_active', 'is_staff']
+class CustomUserAdmin(BaseUserAdmin):
+    list_display = ['username', 'email', 'first_name', 'last_name', 'is_active', 'is_staff']
+    list_filter = ['is_active', 'is_staff', 'is_superuser']
+    search_fields = ['username', 'email', 'first_name', 'last_name']
+    
+    # Use the default fieldsets from BaseUserAdmin
+    fieldsets = BaseUserAdmin.fieldsets
+    add_fieldsets = BaseUserAdmin.add_fieldsets
 
 
 @admin.register(Category)
@@ -66,10 +78,11 @@ class ReviewAdmin(admin.ModelAdmin):
     mark_as_verified.short_description = "Mark selected reviews as verified"
     
     def delete_selected_reviews(self, request, queryset):
+        from django.db.models import Avg
         for review in queryset:
             product = review.product
             review.delete()
-            avg_rating = Review.objects.filter(product=product, is_verified=True).aggregate(models.Avg('rating'))['rating__avg']
+            avg_rating = Review.objects.filter(product=product, is_verified=True).aggregate(Avg('rating'))['rating__avg']
             product.average_rating = avg_rating or 4.5
             product.review_count = Review.objects.filter(product=product, is_verified=True).count()
             product.save()
